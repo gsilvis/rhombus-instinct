@@ -1,5 +1,5 @@
 [package]
-name = "tetris"
+name = "rhombus-instinct"
 version = "0.1.0"
 authors = ["George Silvis, III <george.iii.silvis@gmail.com>"]
 edition = "2018"

@@ -9,7 +9,7 @@ use rand::Rng;
 // I
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Tetrimino {
+enum Tetrhombino {
     I,
     O,
     S,
@@ -104,42 +104,42 @@ fn reduce_orientation(or: Orientation) -> ReducedOrientation {
 const START_POSITION: Position = (4, 20);
 
 trait Randomizer {
-    fn get_piece(&mut self) -> Tetrimino;
+    fn get_piece(&mut self) -> Tetrhombino;
 }
 
 #[derive(Debug)]
 struct TGMRandomizer {
-    history: [Tetrimino; 4],
+    history: [Tetrhombino; 4],
     pieces_given: usize,
 }
 
 impl TGMRandomizer {
     fn new() -> Self {
         TGMRandomizer {
-            history: [Tetrimino::Z, Tetrimino::Z, Tetrimino::S, Tetrimino::S],
+            history: [Tetrhombino::Z, Tetrhombino::Z, Tetrhombino::S, Tetrhombino::S],
             pieces_given: 0,
         }
     }
-    fn helper(&self) -> Tetrimino {
+    fn helper(&self) -> Tetrhombino {
         if self.pieces_given == 0 {
-            return [Tetrimino::I, Tetrimino::T, Tetrimino::L, Tetrimino::J]
+            return [Tetrhombino::I, Tetrhombino::T, Tetrhombino::L, Tetrhombino::J]
                 [rand::thread_rng().gen_range(0, 4)];
         } else {
             return [
-                Tetrimino::O,
-                Tetrimino::I,
-                Tetrimino::S,
-                Tetrimino::Z,
-                Tetrimino::T,
-                Tetrimino::L,
-                Tetrimino::J,
+                Tetrhombino::O,
+                Tetrhombino::I,
+                Tetrhombino::S,
+                Tetrhombino::Z,
+                Tetrhombino::T,
+                Tetrhombino::L,
+                Tetrhombino::J,
             ][rand::thread_rng().gen_range(0, 7)];
         }
     }
 }
 
 impl Randomizer for TGMRandomizer {
-    fn get_piece(&mut self) -> Tetrimino {
+    fn get_piece(&mut self) -> Tetrhombino {
         let mut res = self.helper();
         for _ in 0..6 {
             if !self.history.iter().any(|saved| *saved == res) {
@@ -153,44 +153,44 @@ impl Randomizer for TGMRandomizer {
     }
 }
 
-type Board = [[Option<Tetrimino>; 22]; 10];
+type Board = [[Option<Tetrhombino>; 22]; 10];
 
 #[derive(Debug)]
-struct TetriminoState {
-    tetrimino: Tetrimino,
+struct TetrhombinoState {
+    tetrhombino: Tetrhombino,
     orientation: Orientation,
     position: Position,
 }
 
-impl TetriminoState {
+impl TetrhombinoState {
     fn occupied_places(&self) -> [Position; 4] {
-        let mut result = match self.tetrimino {
-            Tetrimino::O => [(0, 0), (1, 0), (0, -1), (1, -1)],
-            Tetrimino::I => match reduce_orientation(self.orientation) {
+        let mut result = match self.tetrhombino {
+            Tetrhombino::O => [(0, 0), (1, 0), (0, -1), (1, -1)],
+            Tetrhombino::I => match reduce_orientation(self.orientation) {
                 ReducedOrientation::Start => [(2, 0), (1, 0), (0, 0), (-1, 0)],
                 ReducedOrientation::Flipped => [(1, 1), (1, 0), (1, -1), (1, -2)],
             },
-            Tetrimino::S => match reduce_orientation(self.orientation) {
+            Tetrhombino::S => match reduce_orientation(self.orientation) {
                 ReducedOrientation::Start => [(1, 0), (0, 0), (0, -1), (-1, -1)],
                 ReducedOrientation::Flipped => [(0, -1), (0, 0), (1, 0), (1, 1)],
             },
-            Tetrimino::Z => match reduce_orientation(self.orientation) {
+            Tetrhombino::Z => match reduce_orientation(self.orientation) {
                 ReducedOrientation::Start => [(-1, 0), (0, 0), (0, -1), (1, -1)],
                 ReducedOrientation::Flipped => [(0, -1), (0, 0), (-1, 0), (-1, 1)],
             },
-            Tetrimino::T => match self.orientation {
+            Tetrhombino::T => match self.orientation {
                 Orientation::Start => [(0, 0), (-1, 0), (1, 0), (0, -1)],
                 Orientation::Right => [(0, 0), (0, 1), (0, -1), (-1, 0)],
                 Orientation::Left => [(0, 0), (0, 1), (0, -1), (1, 0)],
                 Orientation::Both => [(0, 0), (-1, -1), (0, -1), (1, -1)],
             },
-            Tetrimino::L => match self.orientation {
+            Tetrhombino::L => match self.orientation {
                 Orientation::Start => [(0, 0), (1, 0), (-1, 0), (-1, -1)],
                 Orientation::Right => [(0, 0), (0, 1), (0, -1), (-1, -1)],
                 Orientation::Left => [(0, 0), (0, -1), (0, 1), (1, 1)],
                 Orientation::Both => [(1, 0), (1, -1), (0, -1), (-1, -1)],
             },
-            Tetrimino::J => match self.orientation {
+            Tetrhombino::J => match self.orientation {
                 Orientation::Start => [(0, 0), (-1, 0), (1, 0), (1, -1)],
                 Orientation::Right => [(0, 0), (0, 1), (0, -1), (1, -1)],
                 Orientation::Left => [(0, 0), (0, -1), (0, 1), (-1, 1)],
@@ -208,7 +208,7 @@ impl TetriminoState {
 #[derive(Debug)]
 struct BoardState {
     board: Board,
-    current: TetriminoState,
+    current: TetrhombinoState,
 }
 
 impl BoardState {
@@ -237,22 +237,22 @@ impl BoardState {
     }
     fn kick_allowed(&self) -> bool {
         let (x, y) = self.current.position;
-        match self.current.tetrimino {
-            Tetrimino::O => false,
-            Tetrimino::I => false, // Change for TGM 3 semantics.
-            Tetrimino::S => true,
-            Tetrimino::Z => true,
-            Tetrimino::T => match reduce_orientation(self.current.orientation) {
+        match self.current.tetrhombino {
+            Tetrhombino::O => false,
+            Tetrhombino::I => false, // Change for TGM 3 semantics.
+            Tetrhombino::S => true,
+            Tetrhombino::Z => true,
+            Tetrhombino::T => match reduce_orientation(self.current.orientation) {
                 ReducedOrientation::Start => true,
                 ReducedOrientation::Flipped => !self.center_column_conflicts(),
             },
-            Tetrimino::L => match self.current.orientation {
+            Tetrhombino::L => match self.current.orientation {
                 Orientation::Start => true,
                 Orientation::Both => true,
                 Orientation::Right => self.occupied((x - 1, y - 1)),
                 Orientation::Left => self.occupied((x + 1, y + 1)),
             },
-            Tetrimino::J => match self.current.orientation {
+            Tetrhombino::J => match self.current.orientation {
                 Orientation::Start => true,
                 Orientation::Both => true,
                 Orientation::Right => self.occupied((x - 1, y + 1)),
@@ -277,8 +277,8 @@ impl BoardState {
     }
     fn new() -> Self {
         BoardState {
-            current: TetriminoState {
-                tetrimino: Tetrimino::I,
+            current: TetrhombinoState {
+                tetrhombino: Tetrhombino::I,
                 orientation: Orientation::Start,
                 position: (100, 100), // off the board.
             },
@@ -333,7 +333,7 @@ impl BoardState {
     }
     fn lock(&mut self) {
         for (x, y) in self.occupied_places().into_iter() {
-            self.board[(*x) as usize][(*y) as usize] = Some(self.current.tetrimino);
+            self.board[(*x) as usize][(*y) as usize] = Some(self.current.tetrhombino);
         }
     }
     fn clear(&mut self) -> usize {
@@ -355,7 +355,7 @@ impl BoardState {
         }
         return result;
     }
-    fn spawn(&mut self, new_piece: TetriminoState) {
+    fn spawn(&mut self, new_piece: TetrhombinoState) {
         self.current = new_piece;
     }
 }
@@ -481,7 +481,7 @@ struct Game {
     state: State,
     frames: usize,
     stuck_frames: usize,
-    next: Tetrimino,
+    next: Tetrhombino,
 }
 
 const LINE_CLEAR_FRAMES: usize = 41;
@@ -498,7 +498,7 @@ impl Game {
             state: State::Start,
             frames: 0,
             stuck_frames: 0,
-            next: Tetrimino::I, // doesn't matter.
+            next: Tetrhombino::I, // doesn't matter.
         }
     }
     fn update(&mut self) {
@@ -523,8 +523,8 @@ impl Game {
             }
             State::Are => {
                 if self.frames >= ARE_FRAMES {
-                    self.board.spawn(TetriminoState {
-                        tetrimino: self.next,
+                    self.board.spawn(TetrhombinoState {
+                        tetrhombino: self.next,
                         orientation: Orientation::Start,
                         position: START_POSITION,
                     });
@@ -616,15 +616,15 @@ impl Game {
     }
 }
 
-fn tetrimino_color(tet: Tetrimino) -> [f32; 4] {
+fn tetrhombino_color(tet: Tetrhombino) -> [f32; 4] {
     match tet {
-        Tetrimino::O => [1.0, 1.0, 0.0, 1.0],
-        Tetrimino::I => [0.0, 1.0, 1.0, 1.0],
-        Tetrimino::S => [0.0, 1.0, 0.0, 1.0],
-        Tetrimino::Z => [1.0, 0.0, 0.0, 1.0],
-        Tetrimino::T => [1.0, 0.0, 1.0, 1.0],
-        Tetrimino::L => [1.0, 0.5, 0.0, 1.0],
-        Tetrimino::J => [0.0, 0.0, 1.0, 1.0],
+        Tetrhombino::O => [1.0, 1.0, 0.0, 1.0],
+        Tetrhombino::I => [0.0, 1.0, 1.0, 1.0],
+        Tetrhombino::S => [0.0, 1.0, 0.0, 1.0],
+        Tetrhombino::Z => [1.0, 0.0, 0.0, 1.0],
+        Tetrhombino::T => [1.0, 0.0, 1.0, 1.0],
+        Tetrhombino::L => [1.0, 0.5, 0.0, 1.0],
+        Tetrhombino::J => [0.0, 0.0, 1.0, 1.0],
     }
 }
 
@@ -661,8 +661,8 @@ fn render(game: &Game, gl: &mut opengl_graphics::GlGraphics, args: &piston::inpu
             draw_rhomb((x, 22), GRAY);
         }
 
-        let mut draw_tetrimino_rhomb = |pos: Position, tet: Tetrimino, active: bool| {
-            let mut color = tetrimino_color(tet);
+        let mut draw_tetrhombino_rhomb = |pos: Position, tet: Tetrhombino, active: bool| {
+            let mut color = tetrhombino_color(tet);
             if !active {
                 color[3] = 0.5;
             }
@@ -671,22 +671,22 @@ fn render(game: &Game, gl: &mut opengl_graphics::GlGraphics, args: &piston::inpu
         for x in 0..10 {
             for y in 0..22 {
                 if let Some(tet) = game.board.board[x][y] {
-                    draw_tetrimino_rhomb((x as i8, y as i8), tet, false);
+                    draw_tetrhombino_rhomb((x as i8, y as i8), tet, false);
                 }
             }
         }
 
-        let mut draw_tetrimino = |state: &TetriminoState| {
+        let mut draw_tetrhombino = |state: &TetrhombinoState| {
             for pos in state.occupied_places().iter() {
-                draw_tetrimino_rhomb(*pos, state.tetrimino, true);
+                draw_tetrhombino_rhomb(*pos, state.tetrhombino, true);
             }
         };
         if game.state == State::Falling || game.state == State::Dead {
-            draw_tetrimino(&game.board.current);
+            draw_tetrhombino(&game.board.current);
         }
         if game.state != State::Dead {
-            draw_tetrimino(&TetriminoState {
-                tetrimino: game.next,
+            draw_tetrhombino(&TetrhombinoState {
+                tetrhombino: game.next,
                 position: (-4, 16),
                 orientation: Orientation::Start,
             });
