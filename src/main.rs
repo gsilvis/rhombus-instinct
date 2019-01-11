@@ -31,17 +31,17 @@ impl Orientation {
     fn flip_right(&mut self) {
         *self = match *self {
             Orientation::Start => Orientation::Right,
-            Orientation::Right => Orientation::Start,
+            Orientation::Right => Orientation::Both,
             Orientation::Both => Orientation::Left,
-            Orientation::Left => Orientation::Both,
+            Orientation::Left => Orientation::Start,
         }
     }
     fn flip_left(&mut self) {
         *self = match *self {
             Orientation::Start => Orientation::Left,
-            Orientation::Right => Orientation::Both,
+            Orientation::Left => Orientation::Both,
             Orientation::Both => Orientation::Right,
-            Orientation::Left => Orientation::Start,
+            Orientation::Right => Orientation::Start,
         }
     }
 }
@@ -67,24 +67,24 @@ enum ReducedOrientation {
 //   ....  ..I.
 //   ....  ..I.
 
-//   ...  ..S
-//   .SS  .SS
+//   ...  S..
+//   .SS  SS.
 //   SS.  .S.
 
-//   ...  Z..
-//   ZZ.  ZZ.
+//   ...  ..Z
+//   ZZ.  .ZZ
 //   .ZZ  .Z.
 
 // The 'L', 'J', and 'T' pieces have four orientations, ordered here as Start,
 // Right, Both, Left.
 
-//   ...  .L.  ...  .LL
+//   ...  LL.  ...  .L.
 //   LLL  .L.  ..L  .L.
-//   L..  LL.  LLL  .L.
+//   L..  .L.  LLL  .LL
 
-//   ...  JJ.  ...  .J.
-//   JJJ  .J.  J..  .J.
-//   ..J  .J.  JJJ  .JJ
+//   ...   .J. ...  .JJ
+//   JJJ   .J. J..  .J.
+//   ..J   JJ. JJJ  .J.
 
 //   ...  .T.  ...  .T.
 //   TTT  TT.  .T.  .TT
@@ -181,11 +181,11 @@ impl TetrhombinoState {
             },
             Tetrhombino::S => match reduce_orientation(self.orientation) {
                 ReducedOrientation::Start => [(1, 0), (0, 0), (0, -1), (-1, -1)],
-                ReducedOrientation::Flipped => [(0, -1), (0, 0), (1, 0), (1, 1)],
+                ReducedOrientation::Flipped => [(0, -1), (0, 0), (-1, 0), (-1, 1)],
             },
             Tetrhombino::Z => match reduce_orientation(self.orientation) {
                 ReducedOrientation::Start => [(-1, 0), (0, 0), (0, -1), (1, -1)],
-                ReducedOrientation::Flipped => [(0, -1), (0, 0), (-1, 0), (-1, 1)],
+                ReducedOrientation::Flipped => [(0, -1), (0, 0), (1, 0), (1, 1)],
             },
             Tetrhombino::T => match self.orientation {
                 Orientation::Start => [(0, 0), (-1, 0), (1, 0), (0, -1)],
@@ -195,14 +195,14 @@ impl TetrhombinoState {
             },
             Tetrhombino::L => match self.orientation {
                 Orientation::Start => [(0, 0), (1, 0), (-1, 0), (-1, -1)],
-                Orientation::Right => [(0, 0), (0, 1), (0, -1), (-1, -1)],
-                Orientation::Left => [(0, 0), (0, -1), (0, 1), (1, 1)],
+                Orientation::Right => [(0, 0), (0, 1), (0, -1), (1, -1)],
+                Orientation::Left => [(0, 0), (0, -1), (0, 1), (-1, 1)],
                 Orientation::Both => [(1, 0), (1, -1), (0, -1), (-1, -1)],
             },
             Tetrhombino::J => match self.orientation {
                 Orientation::Start => [(0, 0), (-1, 0), (1, 0), (1, -1)],
-                Orientation::Right => [(0, 0), (0, 1), (0, -1), (1, -1)],
-                Orientation::Left => [(0, 0), (0, -1), (0, 1), (-1, 1)],
+                Orientation::Right => [(0, 0), (0, 1), (0, -1), (-1, -1)],
+                Orientation::Left => [(0, 0), (0, -1), (0, 1), (1, 1)],
                 Orientation::Both => [(-1, 0), (-1, -1), (0, -1), (1, -1)],
             },
         };
