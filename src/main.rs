@@ -153,7 +153,7 @@ impl Randomizer for TGMRandomizer {
     }
 }
 
-type Board = [[Option<Tetrimino>; 21]; 10];
+type Board = [[Option<Tetrimino>; 22]; 10];
 
 #[derive(Debug)]
 struct TetriminoState {
@@ -216,7 +216,7 @@ impl BoardState {
         let (x, y) = pos;
         if x < 0 || x >= 10 {
             true
-        } else if y < 0 || y >= 21 {
+        } else if y < 0 || y >= 22 {
             true
         } else {
             self.board[x as usize][y as usize] != None
@@ -280,9 +280,9 @@ impl BoardState {
             current: TetriminoState {
                 tetrimino: Tetrimino::I,
                 orientation: Orientation::Start,
-                position: (100, 100),   // off the board.
+                position: (100, 100), // off the board.
             },
-            board: [[None; 21]; 10],
+            board: [[None; 22]; 10],
         }
     }
     fn stuck(&mut self) -> bool {
@@ -339,7 +339,7 @@ impl BoardState {
     fn clear(&mut self) -> usize {
         let mut cursor: usize = 0;
         let mut result = 0;
-        for read in 0..21 {
+        for read in 0..22 {
             if (0..10).any(|x| self.board[x][read] == None) {
                 for x in 0..10 {
                     self.board[x][cursor] = self.board[x][read];
@@ -348,7 +348,7 @@ impl BoardState {
                 result += 1;
             }
         }
-        for write in cursor..21 {
+        for write in cursor..22 {
             for x in 0..10 {
                 self.board[x][write] = None;
             }
@@ -368,22 +368,98 @@ impl BoardState {
 // - clear
 
 #[derive(PartialEq, Eq, Debug, Clone, Copy)]
+struct SingleKey {
+    triggered: bool,
+    needs_service: bool,
+}
+
+impl SingleKey {
+    fn new() -> Self {
+        SingleKey {
+            triggered: false,
+            needs_service: false,
+        }
+    }
+    fn trigger(&mut self, press: bool) {
+        if press {
+            if !self.triggered {
+                self.triggered = true;
+                self.needs_service = true;
+            }
+        } else {
+            self.triggered = false;
+        }
+    }
+    fn service(&mut self) -> bool {
+        self.triggered && std::mem::replace(&mut self.needs_service, false)
+    }
+}
+
+#[derive(PartialEq, Eq, Debug, Clone, Copy)]
+struct MultiKey {
+    state: SingleKey,
+    hold_frames: usize,
+}
+
+impl MultiKey {
+    fn new() -> Self {
+        MultiKey {
+            state: SingleKey::new(),
+            hold_frames: 0,
+        }
+    }
+    fn trigger(&mut self, press: bool) {
+        self.state.trigger(press);
+        if !press {
+            self.hold_frames = 0;
+        }
+    }
+    fn service(&mut self) -> bool {
+        if self.state.triggered {
+            self.hold_frames += 1;
+            self.state.service() || self.hold_frames >= 14
+        } else {
+            false
+        }
+    }
+}
+
+#[derive(PartialEq, Eq, Debug, Clone, Copy)]
+struct ContinuousKey {
+    pressed: bool,
+}
+
+impl ContinuousKey {
+    fn new() -> Self {
+        ContinuousKey { pressed: false }
+    }
+    fn trigger(&mut self, press: bool) {
+        self.pressed = press;
+    }
+    fn service(&mut self) -> bool {
+        self.pressed
+    }
+}
+
+#[derive(PartialEq, Eq, Debug, Clone, Copy)]
 struct KeyState {
-    // TODO: handle quick taps, etc.
-    left: Option<usize>,  // frame count
-    right: Option<usize>,
-    fast_drop: Option<usize>,  // Lock if fallen; otherwise drop a frame
-    sonic_drop: bool,  // Drop all the way but do not lock
-    r_left: bool,
-    r_right: bool,
+    left: MultiKey,
+    right: MultiKey,
+    sonic_drop: MultiKey,     // Drop all the way but do not lock
+    fast_drop: ContinuousKey, // Lock if fallen; otherwise drop a frame
+    r_left: SingleKey,
+    r_right: SingleKey,
 }
 
 impl KeyState {
     fn new() -> KeyState {
         KeyState {
-            left: None, right: None,
-            fast_drop: None, sonic_drop: false,
-            r_left: false, r_right: false,
+            left: MultiKey::new(),
+            right: MultiKey::new(),
+            fast_drop: ContinuousKey::new(),
+            sonic_drop: MultiKey::new(),
+            r_left: SingleKey::new(),
+            r_right: SingleKey::new(),
         }
     }
 }
@@ -400,7 +476,7 @@ enum State {
 #[derive(Debug)]
 struct Game {
     board: BoardState,
-    rand: TGMRandomizer,  // todo parameterize.
+    rand: TGMRandomizer, // todo parameterize.
     keys: KeyState,
     state: State,
     frames: usize,
@@ -422,7 +498,7 @@ impl Game {
             state: State::Start,
             frames: 0,
             stuck_frames: 0,
-            next: Tetrimino::I,   // doesn't matter.
+            next: Tetrimino::I, // doesn't matter.
         }
     }
     fn update(&mut self) {
@@ -436,7 +512,7 @@ impl Game {
                 self.frames = 0;
                 self.stuck_frames = 0;
                 self.next = self.rand.get_piece();
-            },
+            }
             State::Clear => {
                 if self.frames >= LINE_CLEAR_FRAMES {
                     self.state = State::Are;
@@ -444,7 +520,7 @@ impl Game {
                 } else {
                     self.frames += 1;
                 }
-            },
+            }
             State::Are => {
                 if self.frames >= ARE_FRAMES {
                     self.board.spawn(TetriminoState {
@@ -463,7 +539,7 @@ impl Game {
                 } else {
                     self.frames += 1;
                 }
-            },
+            }
             State::Falling => {
                 if self.board.stuck() {
                     self.stuck_frames += 1;
@@ -478,65 +554,49 @@ impl Game {
                         self.state = State::Are;
                     }
                     self.frames = 0;
-                } else if self.frames >= GRAVITY_FRAMES {  // TODO: variable gravity
+                } else if self.frames >= GRAVITY_FRAMES {
+                    // TODO: variable gravity
                     self.board.fall();
                     self.frames = 0;
                 } else {
                     self.frames += 1;
                 }
-            },
-        }
-
-        // Handle held keys.
-        if let Some(n) = self.keys.left {
-            self.keys.left = Some(n+1);
-        }
-        if let Some(n) = self.keys.right {
-            self.keys.right = Some(n+1);
-        }
-        if let Some(n) = self.keys.fast_drop {
-            self.keys.fast_drop = Some(n+1);
+            }
         }
 
         if self.state != State::Falling {
+            // Handle DAS during ARE.
+            self.keys.left.service();
+            self.keys.right.service();
             return;
         }
 
         // Handle input.
         // TODO: do multiple things in the right order.
-        if let Some(n) = self.keys.left {
-            if n == 1 || n > 14 {
-                self.board.shift_left();
-            }
+        if self.keys.left.service() {
+            self.board.shift_left();
         }
-        if let Some(n) = self.keys.right {
-            if n == 1 || n > 14 {
-                self.board.shift_right();
-            }
+        if self.keys.right.service() {
+            self.board.shift_right();
         }
-        if self.keys.r_left {
-            self.keys.r_left = false;
+        if self.keys.r_left.service() {
             self.board.rotate_left();
         }
-        if self.keys.r_right {
-            self.keys.r_right = false;
+        if self.keys.r_right.service() {
             self.board.rotate_right();
         }
-        if self.keys.sonic_drop {
-            self.keys.sonic_drop = false;
-            while self.board.fall() { }
+        if self.keys.sonic_drop.service() {
+            while self.board.fall() {}
         }
-        if let Some(n) = self.keys.fast_drop {
-            if n == 1 || n > 14 {
-                if !self.board.fall() {
-                    self.board.lock();
-                    if self.board.clear() > 0 {
-                        self.state = State::Clear;
-                    } else {
-                        self.state = State::Are;
-                    }
-                    self.frames = 0;
+        if self.keys.fast_drop.service() {
+            if !self.board.fall() {
+                self.board.lock();
+                if self.board.clear() > 0 {
+                    self.state = State::Clear;
+                } else {
+                    self.state = State::Are;
                 }
+                self.frames = 0;
             }
         }
     }
@@ -544,77 +604,64 @@ impl Game {
     fn input(&mut self, button: &piston::input::keyboard::Key, press: bool) {
         use piston::input::keyboard::Key;
         match button {
-            Key::Left => if press {
-                self.keys.left = Some(0);
-            } else {  //if 0 != self.keys.left.unwrap_or(0) {
-                self.keys.left = None;
-            },
-            Key::Right => if press {
-                self.keys.right = Some(0);
-            } else {  //if 0 != self.keys.right.unwrap_or(0) {
-                self.keys.right = None;
-            },
-            Key::Up => if press { self.keys.sonic_drop = true; },
-            Key::Down => if press {
-                self.keys.fast_drop = Some(0);
-            } else { //if 0 != self.keys.fast_drop.unwrap_or(0) {
-                self.keys.fast_drop = None;
-            },
-            Key::Z => if press { self.keys.r_left = true; },
-            Key::X => if press { self.keys.r_right = true; },
-            _ => {},
+            Key::Left => self.keys.left.trigger(press),
+            Key::Right => self.keys.right.trigger(press),
+            Key::Up => self.keys.sonic_drop.trigger(press),
+            Key::Down => self.keys.fast_drop.trigger(press),
+            Key::Z => self.keys.r_left.trigger(press),
+            Key::X => self.keys.r_right.trigger(press),
+            _ => {}
             // TODO handle double-rotation in a consistent manner?
         }
     }
 }
 
 fn tetrimino_color(tet: Tetrimino) -> [f32; 4] {
-  match tet {
-    Tetrimino::O => [1.0, 1.0, 0.0, 1.0],
-    Tetrimino::I => [0.0, 1.0, 1.0, 1.0],
-    Tetrimino::S => [0.0, 1.0, 0.0, 1.0],
-    Tetrimino::Z => [1.0, 0.0, 0.0, 1.0],
-    Tetrimino::T => [1.0, 0.0, 1.0, 1.0],
-    Tetrimino::L => [1.0, 0.5, 0.0, 1.0],
-    Tetrimino::J => [0.0, 0.0, 1.0, 1.0],
-  }
+    match tet {
+        Tetrimino::O => [1.0, 1.0, 0.0, 1.0],
+        Tetrimino::I => [0.0, 1.0, 1.0, 1.0],
+        Tetrimino::S => [0.0, 1.0, 0.0, 1.0],
+        Tetrimino::Z => [1.0, 0.0, 0.0, 1.0],
+        Tetrimino::T => [1.0, 0.0, 1.0, 1.0],
+        Tetrimino::L => [1.0, 0.5, 0.0, 1.0],
+        Tetrimino::J => [0.0, 0.0, 1.0, 1.0],
+    }
 }
 
 fn render(game: &Game, gl: &mut opengl_graphics::GlGraphics, args: &piston::input::RenderArgs) {
     use graphics::*;
 
     const BLACK: [f32; 4] = [0.0, 0.0, 0.0, 0.0];
-    const GRAY:  [f32; 4] = [0.7, 0.7, 0.7, 1.0];
+    const GRAY: [f32; 4] = [0.7, 0.7, 0.7, 1.0];
 
     // Play-field is [0, 24] [13, 24] [10, 0] [23, 0]
 
-    let scale = args.width.min(args.height) / 280.0;
+    let scale = args.width.min(args.height) / 290.0;
 
-    let rhombus = [
-        [0.0, 0.0], [13.0, 0.0], [18.0, -12.0], [5.0, -12.0]
-    ];
+    let rhombus = [[0.0, 0.0], [13.0, 0.0], [18.0, -12.0], [5.0, -12.0]];
 
     gl.draw(args.viewport(), |c, gl| {
         clear(BLACK, gl);
 
         let mut draw_rhomb = |(x, y): Position, color: [f32; 4]| {
-            let transform = c.transform
-              .scale(scale, scale)
-              .trans(20.0, 260.0)
-              .trans(13.0*(x as f64), 0.0)
-              .trans(5.0*(y as f64), -12.0*(y as f64));
+            let transform = c
+                .transform
+                .scale(scale, scale)
+                .trans(20.0, 280.0)
+                .trans(13.0 * (x as f64), 0.0)
+                .trans(5.0 * (y as f64), -12.0 * (y as f64));
             polygon(color, &rhombus, transform, gl);
         };
-        for y in -1..22 {
+        for y in -1..23 {
             draw_rhomb((-1, y), GRAY);
             draw_rhomb((10, y), GRAY);
         }
         for x in 0..10 {
             draw_rhomb((x, -1), GRAY);
-            draw_rhomb((x, 21), GRAY);
+            draw_rhomb((x, 22), GRAY);
         }
 
-        let mut draw_tetrimino_rhomb = |pos: Position, tet: Tetrimino, active:bool| {
+        let mut draw_tetrimino_rhomb = |pos: Position, tet: Tetrimino, active: bool| {
             let mut color = tetrimino_color(tet);
             if !active {
                 color[3] = 0.5;
@@ -622,7 +669,7 @@ fn render(game: &Game, gl: &mut opengl_graphics::GlGraphics, args: &piston::inpu
             draw_rhomb(pos, color);
         };
         for x in 0..10 {
-            for y in 0..21 {
+            for y in 0..22 {
                 if let Some(tet) = game.board.board[x][y] {
                     draw_tetrimino_rhomb((x as i8, y as i8), tet, false);
                 }
@@ -659,16 +706,13 @@ fn main() {
     let opengl = opengl_graphics::OpenGL::V3_2;
 
     // Create an Glutin window.
-    let mut window: glutin_window::GlutinWindow = piston::window::WindowSettings::new(
-            "rhombus-instinct",
-            [500, 800]
-        )
-        .opengl(opengl)
-        .vsync(true)
-        .exit_on_esc(true)
-        .build()
-        .unwrap();
-
+    let mut window: glutin_window::GlutinWindow =
+        piston::window::WindowSettings::new("rhombus-instinct", [500, 800])
+            .opengl(opengl)
+            .vsync(true)
+            .exit_on_esc(true)
+            .build()
+            .unwrap();
 
     // Create a new game and run it.
     let mut gl = opengl_graphics::GlGraphics::new(opengl);
@@ -685,14 +729,14 @@ fn main() {
             piston::input::Event::Loop(piston::input::Loop::Render(r)) => {
                 game.update();
                 render(&game, &mut gl, &r);
-            },
+            }
             piston::input::Event::Input(piston::input::Input::Button(args)) => {
                 // println!("{:?}", args);
                 if let piston::input::Button::Keyboard(key) = args.button {
-                  game.input(&key, args.state == piston::input::ButtonState::Press);
+                    game.input(&key, args.state == piston::input::ButtonState::Press);
                 }
-            },
-            _ => {},
+            }
+            _ => {}
         };
     }
 }
