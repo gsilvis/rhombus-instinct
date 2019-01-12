@@ -354,6 +354,7 @@ impl BoardState {
                     self.board[x][cursor] = self.board[x][read];
                 }
                 cursor += 1;
+            } else {
                 result += 1;
             }
         }
@@ -491,6 +492,7 @@ struct Game {
     frames: usize,
     stuck_frames: usize,
     next: Tetrhombino,
+    lines_cleared: usize,
 }
 
 const LINE_CLEAR_FRAMES: usize = 41;
@@ -508,7 +510,19 @@ impl Game {
             frames: 0,
             stuck_frames: 0,
             next: Tetrhombino::I, // doesn't matter.
+            lines_cleared: 0,
         }
+    }
+    fn lock(&mut self) {
+        self.board.lock();
+        let cleared = self.board.clear();
+        if cleared > 0 {
+            self.lines_cleared += cleared;
+            self.state = State::Clear;
+        } else {
+            self.state = State::Are;
+        }
+        self.frames = 0;
     }
     fn update(&mut self) {
         // Update state, and fall/lock as appropriate.
@@ -556,13 +570,7 @@ impl Game {
                     self.stuck_frames = 0;
                 }
                 if self.stuck_frames >= LOCK_FRAMES {
-                    self.board.lock();
-                    if self.board.clear() > 0 {
-                        self.state = State::Clear;
-                    } else {
-                        self.state = State::Are;
-                    }
-                    self.frames = 0;
+                    self.lock();
                 } else if self.frames >= GRAVITY_FRAMES {
                     // TODO: variable gravity
                     self.board.fall();
@@ -599,13 +607,7 @@ impl Game {
         }
         if self.keys.fast_drop.service() {
             if !self.board.fall() {
-                self.board.lock();
-                if self.board.clear() > 0 {
-                    self.state = State::Clear;
-                } else {
-                    self.state = State::Are;
-                }
-                self.frames = 0;
+                self.lock();
             }
         }
     }
@@ -647,6 +649,85 @@ impl Game {
         let color = tetrhombino_color(state.tetrhombino);
         for pos in state.occupied_places().iter() {
             self.draw_rhomb(*pos, color, ctxt, gl);
+        }
+    }
+
+    fn draw_segment(
+        &self,
+        on: bool,
+        ctxt: graphics::context::Context,
+        gl: &mut opengl_graphics::GlGraphics,
+    ) {
+        const SEGMENT: [[f64; 2]; 6] = [
+            [0.05, 0.0],
+            [0.10, 0.05],
+            [0.90, 0.05],
+            [0.95, 0.0],
+            [0.90, -0.05],
+            [0.10, -0.05],
+        ];
+
+        const COLOR_ON: [f32; 4] = [0.0, 0.7, 1.0, 1.0];
+        if on {
+            graphics::polygon(COLOR_ON, &SEGMENT, ctxt.transform, gl);
+        }
+    }
+
+    fn draw_digit(
+        &self,
+        digit: u8,
+        ctxt: graphics::context::Context,
+        gl: &mut opengl_graphics::GlGraphics,
+    ) {
+        //   4
+        // 0   2
+        //   5
+        // 1   3
+        //   6
+        const DIGITS: [[bool; 7]; 10] = [
+            [true, true, true, true, true, false, true],
+            [false, false, true, true, false, false, false],
+            [false, true, true, false, true, true, true],
+            [false, false, true, true, true, true, true],
+            [true, false, true, true, false, true, false],
+            [true, false, false, true, true, true, true],
+            [true, true, false, true, true, true, true],
+            [false, false, true, true, true, false, false],
+            [true, true, true, true, true, true, true],
+            [true, false, true, true, true, true, true],
+        ];
+
+        use graphics::Transformed;
+        let ctxts = [
+            ctxt.trans(0.0, 1.0).rot_deg(90.0),
+            ctxt.rot_deg(90.0),
+            ctxt.trans(1.0, 1.0).rot_deg(90.0),
+            ctxt.trans(1.0, 0.0).rot_deg(90.0),
+            ctxt.trans(0.0, 2.0),
+            ctxt.trans(0.0, 1.0),
+            ctxt,
+        ];
+
+        for i in 0..7 {
+            self.draw_segment(DIGITS[digit as usize][i], ctxts[i], gl);
+        }
+    }
+
+    fn draw_number(
+        &self,
+        mut number: usize,
+        mut ctxt: graphics::context::Context,
+        gl: &mut opengl_graphics::GlGraphics,
+    ) {
+        if number == 0 {
+            self.draw_digit(0, ctxt, gl);
+            return;
+        }
+        while number > 0 {
+            self.draw_digit((number % 10) as u8, ctxt, gl);
+            number = number / 10;
+            use graphics::Transformed;
+            ctxt = ctxt.trans(-1.5, 0.0);
         }
     }
 
@@ -702,6 +783,8 @@ impl Game {
                 gl,
             );
         }
+
+        self.draw_number(self.lines_cleared, ctxt.trans(15.0, 3.0), gl);
     }
 }
 
