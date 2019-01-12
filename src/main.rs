@@ -28,7 +28,7 @@ enum Orientation {
 }
 
 impl Orientation {
-    fn rotate_right(&mut self) {
+    fn flip_right(&mut self) {
         *self = match *self {
             Orientation::Start => Orientation::Right,
             Orientation::Right => Orientation::Start,
@@ -36,7 +36,7 @@ impl Orientation {
             Orientation::Left => Orientation::Both,
         }
     }
-    fn rotate_left(&mut self) {
+    fn flip_left(&mut self) {
         *self = match *self {
             Orientation::Start => Orientation::Left,
             Orientation::Right => Orientation::Both,
@@ -308,18 +308,18 @@ impl BoardState {
         }
         return true;
     }
-    fn rotate_right(&mut self) -> bool {
-        self.current.orientation.rotate_right();
+    fn flip_right(&mut self) -> bool {
+        self.current.orientation.flip_right();
         if !self.finish_rotate() {
-            self.current.orientation.rotate_right();
+            self.current.orientation.flip_right();
             return false;
         }
         return true;
     }
-    fn rotate_left(&mut self) -> bool {
-        self.current.orientation.rotate_left();
+    fn flip_left(&mut self) -> bool {
+        self.current.orientation.flip_left();
         if !self.finish_rotate() {
-            self.current.orientation.rotate_left();
+            self.current.orientation.flip_left();
             return false;
         }
         return true;
@@ -373,7 +373,7 @@ impl BoardState {
 // Proper game logic:
 // - spawn
 // - current_piece_conflicts [determine game end]
-// - rotate_right, rotate_left, shift_right, shift_left, fall
+// - flip_right, flip_left, shift_right, shift_left, fall
 // - lock
 // - clear
 
@@ -624,10 +624,10 @@ impl Game {
             self.board.shift_right();
         }
         if self.keys.r_left.service() {
-            self.board.rotate_left();
+            self.board.flip_left();
         }
         if self.keys.r_right.service() {
-            self.board.rotate_right();
+            self.board.flip_right();
         }
         if self.keys.sonic_drop.service() {
             while self.board.fall() {}
