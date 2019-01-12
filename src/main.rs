@@ -107,7 +107,7 @@ trait Randomizer {
     fn get_piece(&mut self) -> Tetrhombino;
 }
 
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 struct TGMRandomizer {
     history: [Tetrhombino; 4],
     pieces_given: usize,
@@ -164,7 +164,7 @@ impl Randomizer for TGMRandomizer {
 
 type Board = [[Option<Tetrhombino>; 22]; 10];
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 struct TetrhombinoState {
     tetrhombino: Tetrhombino,
     orientation: Orientation,
@@ -172,7 +172,7 @@ struct TetrhombinoState {
 }
 
 impl TetrhombinoState {
-    fn occupied_places(&self) -> [Position; 4] {
+    fn occupied_places(self) -> [Position; 4] {
         let mut result = match self.tetrhombino {
             Tetrhombino::O => [(0, 0), (1, 0), (0, -1), (1, -1)],
             Tetrhombino::I => match reduce_orientation(self.orientation) {
@@ -214,7 +214,7 @@ impl TetrhombinoState {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 struct BoardState {
     board: Board,
     current: TetrhombinoState,
@@ -233,13 +233,14 @@ impl BoardState {
         let (x, y) = self.current.position;
         self.occupied((x, y - 1)) || self.occupied((x, y)) || self.occupied((x, y + 1))
     }
-    fn occupied_places(&self) -> [Position; 4] {
-        self.current.occupied_places()
-    }
-    fn current_piece_conflicts(&self) -> bool {
-        self.occupied_places()
+    fn piece_conflicts(&self, state: TetrhombinoState) -> bool {
+        state
+            .occupied_places()
             .into_iter()
             .any(|pos| self.occupied(*pos))
+    }
+    fn current_piece_conflicts(&self) -> bool {
+        self.piece_conflicts(self.current)
     }
     fn kick_allowed(&self) -> bool {
         let (x, y) = self.current.position;
@@ -306,6 +307,14 @@ impl BoardState {
             true
         }
     }
+    fn get_shadow(&self) -> TetrhombinoState {
+        let mut res = self.current;
+        while !self.piece_conflicts(res) {
+            res.position.1 -= 1;
+        }
+        res.position.1 += 1;
+        res
+    }
     fn flip_right(&mut self) -> bool {
         self.current.orientation.flip_right();
         if !self.finish_rotate() {
@@ -343,7 +352,7 @@ impl BoardState {
         }
     }
     fn lock(&mut self) {
-        for (x, y) in self.occupied_places().into_iter() {
+        for (x, y) in self.current.occupied_places().into_iter() {
             self.board[(*x) as usize][(*y) as usize] = Some(self.current.tetrhombino);
         }
     }
@@ -485,7 +494,7 @@ trait DifficultyCurve {
     fn done(&self) -> bool;
 }
 
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 struct NormalDifficulty {
     lines_cleared: usize,
 }
@@ -529,7 +538,7 @@ enum State {
     Victory,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 struct Game {
     board: BoardState,
     rand: TGMRandomizer, // todo parameterize.
@@ -690,11 +699,11 @@ impl Game {
 
     fn draw_tetrhombino(
         &self,
-        state: &TetrhombinoState,
+        state: TetrhombinoState,
+        color: [f32; 4],
         ctxt: graphics::context::Context,
         gl: &mut opengl_graphics::GlGraphics,
     ) {
-        let color = tetrhombino_color(state.tetrhombino);
         for pos in state.occupied_places().iter() {
             self.draw_rhomb(*pos, color, ctxt, gl);
         }
@@ -817,16 +826,21 @@ impl Game {
         }
 
         if self.state == State::Falling || self.state == State::Loss {
-            self.draw_tetrhombino(&self.board.current, ctxt, gl);
+            const SHADOW_COLOR: [f32; 4] = [0.3, 0.3, 0.3, 1.0];
+            self.draw_tetrhombino(self.board.get_shadow(), SHADOW_COLOR, ctxt, gl);
+            let color = tetrhombino_color(self.board.current.tetrhombino);
+            self.draw_tetrhombino(self.board.current, color, ctxt, gl);
         }
 
         if self.state != State::Loss {
+            let color = tetrhombino_color(self.next);
             self.draw_tetrhombino(
-                &TetrhombinoState {
+                TetrhombinoState {
                     tetrhombino: self.next,
                     position: (-4, 16),
                     orientation: Orientation::Start,
                 },
+                color,
                 ctxt,
                 gl,
             );
