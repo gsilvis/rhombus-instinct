@@ -521,9 +521,10 @@ impl DifficultyCurve for NormalDifficulty {
 enum State {
     Start,
     Falling,
-    Are,
-    Clear,
-    Dead,
+    Are(usize),   // frame count
+    Clear(usize), // frame count
+    Loss,
+    Victory,
 }
 
 #[derive(Debug)]
@@ -532,8 +533,8 @@ struct Game {
     rand: TGMRandomizer, // todo parameterize.
     keys: KeyState,
     state: State,
-    frames: usize,
     stuck_frames: usize,
+    gravity_count: usize,
     next: Tetrhombino,
     lines_cleared: usize,
     stage: NormalDifficulty, // todo parameterize.
@@ -546,12 +547,27 @@ impl Game {
             rand: TGMRandomizer::new(),
             keys: KeyState::new(),
             state: State::Start,
-            frames: 0,
             stuck_frames: 0,
+            gravity_count: 0,
             next: Tetrhombino::I, // doesn't matter.
             lines_cleared: 0,
             stage: NormalDifficulty::new(),
         }
+    }
+    fn spawn(&mut self) {
+        self.board.spawn(TetrhombinoState {
+            tetrhombino: self.next,
+            orientation: Orientation::Start,
+            position: START_POSITION,
+        });
+        if self.board.current_piece_conflicts() {
+            self.state = State::Loss;
+            return;
+        }
+        self.next = self.rand.get_piece();
+        self.state = State::Falling;
+        self.stuck_frames = 0;
+        self.gravity_count = 0;
     }
     fn lock(&mut self) {
         self.board.lock();
@@ -559,81 +575,48 @@ impl Game {
         if cleared > 0 {
             self.lines_cleared += cleared;
             self.stage.clear_lines(cleared);
-            self.state = State::Clear;
+            self.state = State::Clear(0);
         } else {
-            self.state = State::Are;
+            self.state = State::Are(0);
         }
-        self.frames = 0;
+        if self.stage.done() {
+            self.state = State::Victory;
+        }
     }
     fn update(&mut self) {
-        // Update state, and fall/lock as appropriate.
-        if self.stage.done() {
+        if self.state == State::Loss || self.state == State::Victory {
             return;
         }
-        match self.state {
-            State::Dead => {
-                return;
+
+        // Progress through inter-piece state machine; keep this in this order
+        // so that 0-frame Are and Clear phases work correctly.
+        if self.state == State::Start {
+            self.state = State::Are(0);
+            self.next = self.rand.get_piece();
+        }
+        if let State::Clear(n) = self.state {
+            if n >= self.stage.get_clear_frames() {
+                self.state = State::Are(0);
+            } else {
+                self.state = State::Clear(n + 1);
             }
-            State::Start => {
-                self.state = State::Are;
-                self.frames = 0;
-                self.stuck_frames = 0;
-                self.next = self.rand.get_piece();
-            }
-            State::Clear => {
-                if self.frames >= self.stage.get_clear_frames() {
-                    self.state = State::Are;
-                    self.frames = 0;
-                } else {
-                    self.frames += 1;
-                }
-            }
-            State::Are => {
-                if self.frames >= self.stage.get_are_frames() {
-                    self.board.spawn(TetrhombinoState {
-                        tetrhombino: self.next,
-                        orientation: Orientation::Start,
-                        position: START_POSITION,
-                    });
-                    if self.board.current_piece_conflicts() {
-                        self.state = State::Dead;
-                        return;
-                    }
-                    self.next = self.rand.get_piece();
-                    self.state = State::Falling;
-                    self.stuck_frames = 0;
-                    self.frames = 0;
-                } else {
-                    self.frames += 1;
-                }
-            }
-            State::Falling => {
-                if self.board.stuck() {
-                    self.stuck_frames += 1;
-                } else {
-                    self.stuck_frames = 0;
-                }
-                if self.stuck_frames >= self.stage.get_lock_frames() {
-                    self.lock();
-                } else {
-                    self.frames += self.stage.get_gravity();
-                    while self.frames >= 256 {
-                        self.board.fall();
-                        self.frames -= 256;
-                    }
-                }
+        }
+        if let State::Are(n) = self.state {
+            if n >= self.stage.get_are_frames() {
+                self.spawn();
+            } else {
+                self.state = State::Are(n + 1);
             }
         }
 
+        // Handle DAS during ARE/Line-clear
         if self.state != State::Falling {
-            // Handle DAS during ARE.
             self.keys.left.service();
             self.keys.right.service();
             return;
         }
 
-        // Handle input.
-        // TODO: do multiple things in the right order.
+        // Input
         if self.keys.left.service() {
             self.board.shift_left();
         }
@@ -651,6 +634,27 @@ impl Game {
         }
         if self.keys.fast_drop.service() {
             if !self.board.fall() {
+                self.lock();
+                return;
+            }
+        }
+
+        // Fall
+        if !self.board.stuck() {
+            self.stuck_frames = 0;
+            self.gravity_count += self.stage.get_gravity();
+            while self.gravity_count >= 256 {
+                self.board.fall();
+                self.gravity_count -= 256;
+            }
+        } else {
+            self.stuck_frames += 1;
+        }
+
+        // Lock
+        if self.board.stuck() {
+            self.gravity_count = 0;
+            if self.stuck_frames >= self.stage.get_lock_frames() {
                 self.lock();
             }
         }
@@ -812,11 +816,11 @@ impl Game {
             }
         }
 
-        if self.state == State::Falling || self.state == State::Dead {
+        if self.state == State::Falling || self.state == State::Loss {
             self.draw_tetrhombino(&self.board.current, ctxt, gl);
         }
 
-        if self.state != State::Dead {
+        if self.state != State::Loss {
             self.draw_tetrhombino(
                 &TetrhombinoState {
                     tetrhombino: self.next,
