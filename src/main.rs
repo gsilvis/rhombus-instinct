@@ -630,17 +630,12 @@ impl Game {
         ctxt: graphics::context::Context,
         gl: &mut opengl_graphics::GlGraphics,
     ) {
-        use graphics::Transformed;
-        let dims = ctxt.get_view_size();
-        let scale = dims[0].min(dims[1]) / 290.0;
-        let rhombus = [[0.0, 0.0], [13.0, 0.0], [18.0, -12.0], [5.0, -12.0]];
-        let transform = ctxt
-            .transform
-            .scale(scale, scale)
-            .trans(20.0, 280.0)
-            .trans(13.0 * (x as f64), 0.0)
-            .trans(5.0 * (y as f64), -12.0 * (y as f64));
-        graphics::polygon(color, &rhombus, transform, gl);
+        graphics::Rectangle::new(color).draw(
+            [x as f64, y as f64, 1.0, 1.0],
+            &ctxt.draw_state,
+            ctxt.transform,
+            gl,
+        );
     }
 
     fn draw_tetrhombino(
@@ -655,22 +650,32 @@ impl Game {
         }
     }
 
-    fn render(&self, ctxt: graphics::context::Context, gl: &mut opengl_graphics::GlGraphics) {
-        const BLACK: [f32; 4] = [0.0, 0.0, 0.0, 0.0];
-        const GRAY: [f32; 4] = [0.7, 0.7, 0.7, 1.0];
+    fn render(&self, mut ctxt: graphics::context::Context, gl: &mut opengl_graphics::GlGraphics) {
+        use graphics::Transformed;
+        let dims = ctxt.get_view_size();
+        let scale = dims[0].min(dims[1]) / 290.0;
+        ctxt = ctxt
+            .scale(scale, scale)
+            .trans(20.0, 277.5)
+            .append_transform([[13.0, 5.0, 0.0], [0.0, -12.0, 0.0]]);
 
-        // Play-field is [0, 24] [13, 24] [10, 0] [23, 0]
+        const BLACK: [f32; 4] = [0.0, 0.0, 0.0, 1.0];
+        const GRAY: [f32; 4] = [0.7, 0.7, 0.7, 1.0];
 
         graphics::clear(BLACK, gl);
 
-        for y in -1..23 {
-            self.draw_rhomb((-1, y), GRAY, ctxt, gl);
-            self.draw_rhomb((10, y), GRAY, ctxt, gl);
-        }
-        for x in 0..10 {
-            self.draw_rhomb((x, -1), GRAY, ctxt, gl);
-            self.draw_rhomb((x, 22), GRAY, ctxt, gl);
-        }
+        graphics::Rectangle::new(GRAY).draw(
+            [-0.5, -0.5, 11.0, 23.0],
+            &ctxt.draw_state,
+            ctxt.transform,
+            gl,
+        );
+        graphics::Rectangle::new(BLACK).draw(
+            [0.0, 0.0, 10.0, 22.0],
+            &ctxt.draw_state,
+            ctxt.transform,
+            gl,
+        );
 
         for x in 0..10 {
             for y in 0..22 {
