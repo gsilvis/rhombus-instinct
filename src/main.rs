@@ -127,14 +127,14 @@ impl TGMRandomizer {
     }
     fn helper(&self) -> Tetrhombino {
         if self.pieces_given == 0 {
-            return [
+            [
                 Tetrhombino::I,
                 Tetrhombino::T,
                 Tetrhombino::L,
                 Tetrhombino::J,
-            ][rand::thread_rng().gen_range(0, 4)];
+            ][rand::thread_rng().gen_range(0, 4)]
         } else {
-            return [
+            [
                 Tetrhombino::O,
                 Tetrhombino::I,
                 Tetrhombino::S,
@@ -142,7 +142,7 @@ impl TGMRandomizer {
                 Tetrhombino::T,
                 Tetrhombino::L,
                 Tetrhombino::J,
-            ][rand::thread_rng().gen_range(0, 7)];
+            ][rand::thread_rng().gen_range(0, 7)]
         }
     }
 }
@@ -158,7 +158,7 @@ impl Randomizer for TGMRandomizer {
         }
         self.history[self.pieces_given % 4] = res;
         self.pieces_given += 1;
-        return res;
+        res
     }
 }
 
@@ -206,9 +206,9 @@ impl TetrhombinoState {
                 Orientation::Both => [(-1, 0), (-1, -1), (0, -1), (1, -1)],
             },
         };
-        for i in 0..4 {
-            result[i].0 += self.position.0;
-            result[i].1 += self.position.1;
+        for elt in result.iter_mut() {
+            elt.0 += self.position.0;
+            elt.1 += self.position.1;
         }
         result
     }
@@ -223,9 +223,7 @@ struct BoardState {
 impl BoardState {
     fn occupied(&self, pos: Position) -> bool {
         let (x, y) = pos;
-        if x < 0 || x >= 10 {
-            true
-        } else if y < 0 || y >= 22 {
+        if x < 0 || x >= 10 || y < 0 || y >= 22 {
             true
         } else {
             self.board[x as usize][y as usize] != None
@@ -239,10 +237,9 @@ impl BoardState {
         self.current.occupied_places()
     }
     fn current_piece_conflicts(&self) -> bool {
-        return self
-            .occupied_places()
+        self.occupied_places()
             .into_iter()
-            .any(|pos| self.occupied(*pos));
+            .any(|pos| self.occupied(*pos))
     }
     fn kick_allowed(&self) -> bool {
         let (x, y) = self.current.position;
@@ -282,7 +279,7 @@ impl BoardState {
         if self.shift_left() {
             return true;
         }
-        return false;
+        false
     }
     fn new() -> Self {
         BoardState {
@@ -298,47 +295,52 @@ impl BoardState {
         self.current.position.1 -= 1;
         let result = self.current_piece_conflicts();
         self.current.position.1 += 1;
-        return result;
+        result
     }
     fn fall(&mut self) -> bool {
         self.current.position.1 -= 1;
         if self.current_piece_conflicts() {
             self.current.position.1 += 1;
-            return false;
+            false
+        } else {
+            true
         }
-        return true;
     }
     fn flip_right(&mut self) -> bool {
         self.current.orientation.flip_right();
         if !self.finish_rotate() {
             self.current.orientation.flip_right();
-            return false;
+            false
+        } else {
+            true
         }
-        return true;
     }
     fn flip_left(&mut self) -> bool {
         self.current.orientation.flip_left();
         if !self.finish_rotate() {
             self.current.orientation.flip_left();
-            return false;
+            false
+        } else {
+            true
         }
-        return true;
     }
     fn shift_left(&mut self) -> bool {
         self.current.position.0 -= 1;
         if self.current_piece_conflicts() {
             self.current.position.0 += 1;
-            return false;
+            false
+        } else {
+            true
         }
-        return true;
     }
     fn shift_right(&mut self) -> bool {
         self.current.position.0 += 1;
         if self.current_piece_conflicts() {
             self.current.position.0 -= 1;
-            return false;
+            false
+        } else {
+            true
         }
-        return true;
     }
     fn lock(&mut self) {
         for (x, y) in self.occupied_places().into_iter() {
@@ -363,7 +365,7 @@ impl BoardState {
                 self.board[x][write] = None;
             }
         }
-        return result;
+        result
     }
     fn spawn(&mut self, new_piece: TetrhombinoState) {
         self.current = new_piece;
@@ -632,11 +634,9 @@ impl Game {
         if self.keys.sonic_drop.service() {
             while self.board.fall() {}
         }
-        if self.keys.fast_drop.service() {
-            if !self.board.fall() {
-                self.lock();
-                return;
-            }
+        if self.keys.fast_drop.service() && !self.board.fall() {
+            self.lock();
+            return;
         }
 
         // Fall
@@ -660,7 +660,7 @@ impl Game {
         }
     }
 
-    fn input(&mut self, button: &piston::input::keyboard::Key, press: bool) {
+    fn input(&mut self, button: piston::input::keyboard::Key, press: bool) {
         use piston::input::keyboard::Key;
         match button {
             Key::Left => self.keys.left.trigger(press),
@@ -681,7 +681,7 @@ impl Game {
         gl: &mut opengl_graphics::GlGraphics,
     ) {
         graphics::Rectangle::new(color).draw(
-            [x as f64, y as f64, 1.0, 1.0],
+            [f64::from(x), f64::from(y), 1.0, 1.0],
             &ctxt.draw_state,
             ctxt.transform,
             gl,
@@ -756,8 +756,8 @@ impl Game {
             ctxt,
         ];
 
-        for i in 0..7 {
-            self.draw_segment(DIGITS[digit as usize][i], ctxts[i], gl);
+        for (on, ctxt) in DIGITS[digit as usize].into_iter().zip(ctxts.into_iter()) {
+            self.draw_segment(*on, *ctxt, gl);
         }
     }
 
@@ -773,7 +773,7 @@ impl Game {
         }
         while number > 0 {
             self.draw_digit((number % 10) as u8, ctxt, gl);
-            number = number / 10;
+            number /= 10;
             use graphics::Transformed;
             ctxt = ctxt.trans(-1.5, 0.0);
         }
@@ -880,7 +880,7 @@ fn main() {
             piston::input::Event::Input(piston::input::Input::Button(args)) => {
                 // println!("{:?}", args);
                 if let piston::input::Button::Keyboard(key) = args.button {
-                    game.input(&key, args.state == piston::input::ButtonState::Press);
+                    game.input(key, args.state == piston::input::ButtonState::Press);
                 }
             }
             _ => {}
