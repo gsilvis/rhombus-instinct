@@ -116,14 +116,23 @@ struct TGMRandomizer {
 impl TGMRandomizer {
     fn new() -> Self {
         TGMRandomizer {
-            history: [Tetrhombino::Z, Tetrhombino::Z, Tetrhombino::S, Tetrhombino::S],
+            history: [
+                Tetrhombino::Z,
+                Tetrhombino::Z,
+                Tetrhombino::S,
+                Tetrhombino::S,
+            ],
             pieces_given: 0,
         }
     }
     fn helper(&self) -> Tetrhombino {
         if self.pieces_given == 0 {
-            return [Tetrhombino::I, Tetrhombino::T, Tetrhombino::L, Tetrhombino::J]
-                [rand::thread_rng().gen_range(0, 4)];
+            return [
+                Tetrhombino::I,
+                Tetrhombino::T,
+                Tetrhombino::L,
+                Tetrhombino::J,
+            ][rand::thread_rng().gen_range(0, 4)];
         } else {
             return [
                 Tetrhombino::O,
@@ -610,8 +619,83 @@ impl Game {
             Key::Down => self.keys.fast_drop.trigger(press),
             Key::Z => self.keys.r_left.trigger(press),
             Key::X => self.keys.r_right.trigger(press),
-            _ => {}
-            // TODO handle double-rotation in a consistent manner?
+            _ => {} // TODO handle double-rotation in a consistent manner?
+        }
+    }
+
+    fn draw_rhomb(
+        &self,
+        (x, y): Position,
+        color: [f32; 4],
+        ctxt: graphics::context::Context,
+        gl: &mut opengl_graphics::GlGraphics,
+    ) {
+        use graphics::Transformed;
+        let dims = ctxt.get_view_size();
+        let scale = dims[0].min(dims[1]) / 290.0;
+        let rhombus = [[0.0, 0.0], [13.0, 0.0], [18.0, -12.0], [5.0, -12.0]];
+        let transform = ctxt
+            .transform
+            .scale(scale, scale)
+            .trans(20.0, 280.0)
+            .trans(13.0 * (x as f64), 0.0)
+            .trans(5.0 * (y as f64), -12.0 * (y as f64));
+        graphics::polygon(color, &rhombus, transform, gl);
+    }
+
+    fn draw_tetrhombino(
+        &self,
+        state: &TetrhombinoState,
+        ctxt: graphics::context::Context,
+        gl: &mut opengl_graphics::GlGraphics,
+    ) {
+        let color = tetrhombino_color(state.tetrhombino);
+        for pos in state.occupied_places().iter() {
+            self.draw_rhomb(*pos, color, ctxt, gl);
+        }
+    }
+
+    fn render(&self, ctxt: graphics::context::Context, gl: &mut opengl_graphics::GlGraphics) {
+        const BLACK: [f32; 4] = [0.0, 0.0, 0.0, 0.0];
+        const GRAY: [f32; 4] = [0.7, 0.7, 0.7, 1.0];
+
+        // Play-field is [0, 24] [13, 24] [10, 0] [23, 0]
+
+        graphics::clear(BLACK, gl);
+
+        for y in -1..23 {
+            self.draw_rhomb((-1, y), GRAY, ctxt, gl);
+            self.draw_rhomb((10, y), GRAY, ctxt, gl);
+        }
+        for x in 0..10 {
+            self.draw_rhomb((x, -1), GRAY, ctxt, gl);
+            self.draw_rhomb((x, 22), GRAY, ctxt, gl);
+        }
+
+        for x in 0..10 {
+            for y in 0..22 {
+                if let Some(tet) = self.board.board[x][y] {
+                    let mut color = tetrhombino_color(tet);
+                    color[3] = 0.5;
+                    self.draw_rhomb((x as i8, y as i8), color, ctxt, gl);
+                }
+            }
+        }
+
+        if self.state == State::Falling || self.state == State::Dead {
+            self.draw_tetrhombino(&self.board.current, ctxt, gl);
+        }
+
+        if self.state != State::Dead {
+            self.draw_tetrhombino(
+                &TetrhombinoState {
+                    tetrhombino: self.next,
+                    position: (-4, 16),
+                    orientation: Orientation::Start,
+                },
+                ctxt,
+                gl,
+            );
         }
     }
 }
@@ -626,79 +710,6 @@ fn tetrhombino_color(tet: Tetrhombino) -> [f32; 4] {
         Tetrhombino::L => [1.0, 0.5, 0.0, 1.0],
         Tetrhombino::J => [0.0, 0.0, 1.0, 1.0],
     }
-}
-
-fn render(game: &Game, gl: &mut opengl_graphics::GlGraphics, args: &piston::input::RenderArgs) {
-    use graphics::*;
-
-    const BLACK: [f32; 4] = [0.0, 0.0, 0.0, 0.0];
-    const GRAY: [f32; 4] = [0.7, 0.7, 0.7, 1.0];
-
-    // Play-field is [0, 24] [13, 24] [10, 0] [23, 0]
-
-    let scale = args.width.min(args.height) / 290.0;
-
-    let rhombus = [[0.0, 0.0], [13.0, 0.0], [18.0, -12.0], [5.0, -12.0]];
-
-    gl.draw(args.viewport(), |c, gl| {
-        clear(BLACK, gl);
-
-        let mut draw_rhomb = |(x, y): Position, color: [f32; 4]| {
-            let transform = c
-                .transform
-                .scale(scale, scale)
-                .trans(20.0, 280.0)
-                .trans(13.0 * (x as f64), 0.0)
-                .trans(5.0 * (y as f64), -12.0 * (y as f64));
-            polygon(color, &rhombus, transform, gl);
-        };
-        for y in -1..23 {
-            draw_rhomb((-1, y), GRAY);
-            draw_rhomb((10, y), GRAY);
-        }
-        for x in 0..10 {
-            draw_rhomb((x, -1), GRAY);
-            draw_rhomb((x, 22), GRAY);
-        }
-
-        let mut draw_tetrhombino_rhomb = |pos: Position, tet: Tetrhombino, active: bool| {
-            let mut color = tetrhombino_color(tet);
-            if !active {
-                color[3] = 0.5;
-            }
-            draw_rhomb(pos, color);
-        };
-        for x in 0..10 {
-            for y in 0..22 {
-                if let Some(tet) = game.board.board[x][y] {
-                    draw_tetrhombino_rhomb((x as i8, y as i8), tet, false);
-                }
-            }
-        }
-
-        let mut draw_tetrhombino = |state: &TetrhombinoState| {
-            for pos in state.occupied_places().iter() {
-                draw_tetrhombino_rhomb(*pos, state.tetrhombino, true);
-            }
-        };
-        if game.state == State::Falling || game.state == State::Dead {
-            draw_tetrhombino(&game.board.current);
-        }
-        if game.state != State::Dead {
-            draw_tetrhombino(&TetrhombinoState {
-                tetrhombino: game.next,
-                position: (-4, 16),
-                orientation: Orientation::Start,
-            });
-        }
-
-        // let transform = c.transform.trans(x, y);
-
-        // Draw a box rotating around the middle of the screen.
-        // polygon(RED, &rhombus, transform, gl);
-        // polygon(RED, &rhombus, c.transform.trans(x+65.0, y), gl);
-        // polygon(GREEN, &rhombus, c.transform.trans(x-65.0, y), gl);
-    });
 }
 
 fn main() {
@@ -728,7 +739,7 @@ fn main() {
         match e {
             piston::input::Event::Loop(piston::input::Loop::Render(r)) => {
                 game.update();
-                render(&game, &mut gl, &r);
+                gl.draw(r.viewport(), |c, gl| game.render(c, gl));
             }
             piston::input::Event::Input(piston::input::Input::Button(args)) => {
                 // println!("{:?}", args);
