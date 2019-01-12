@@ -474,6 +474,49 @@ impl KeyState {
     }
 }
 
+trait DifficultyCurve {
+    fn get_gravity(&self) -> usize; // units are G/256
+    fn get_are_frames(&self) -> usize;
+    fn get_clear_frames(&self) -> usize;
+    fn get_lock_frames(&self) -> usize;
+    fn clear_lines(&mut self, lines: usize);
+    fn done(&self) -> bool;
+}
+
+#[derive(Debug)]
+struct NormalDifficulty {
+    lines_cleared: usize,
+}
+
+impl NormalDifficulty {
+    fn new() -> Self {
+        NormalDifficulty { lines_cleared: 0 }
+    }
+}
+
+impl DifficultyCurve for NormalDifficulty {
+    fn get_gravity(&self) -> usize {
+        const SPEED_TABLE: [usize; 15] =
+            [4, 8, 12, 16, 20, 24, 28, 32, 48, 64, 80, 96, 112, 128, 256];
+        SPEED_TABLE[self.lines_cleared / 10]
+    }
+    fn get_are_frames(&self) -> usize {
+        25
+    }
+    fn get_clear_frames(&self) -> usize {
+        40
+    }
+    fn get_lock_frames(&self) -> usize {
+        30
+    }
+    fn clear_lines(&mut self, lines: usize) {
+        self.lines_cleared += lines;
+    }
+    fn done(&self) -> bool {
+        self.lines_cleared >= 150
+    }
+}
+
 #[derive(PartialEq, Eq, Debug, Clone, Copy)]
 enum State {
     Start,
@@ -493,12 +536,8 @@ struct Game {
     stuck_frames: usize,
     next: Tetrhombino,
     lines_cleared: usize,
+    stage: NormalDifficulty, // todo parameterize.
 }
-
-const LINE_CLEAR_FRAMES: usize = 41;
-const ARE_FRAMES: usize = 15;
-const GRAVITY_FRAMES: usize = 1;
-const LOCK_FRAMES: usize = 20;
 
 impl Game {
     fn new() -> Game {
@@ -511,6 +550,7 @@ impl Game {
             stuck_frames: 0,
             next: Tetrhombino::I, // doesn't matter.
             lines_cleared: 0,
+            stage: NormalDifficulty::new(),
         }
     }
     fn lock(&mut self) {
@@ -518,6 +558,7 @@ impl Game {
         let cleared = self.board.clear();
         if cleared > 0 {
             self.lines_cleared += cleared;
+            self.stage.clear_lines(cleared);
             self.state = State::Clear;
         } else {
             self.state = State::Are;
@@ -526,6 +567,9 @@ impl Game {
     }
     fn update(&mut self) {
         // Update state, and fall/lock as appropriate.
+        if self.stage.done() {
+            return;
+        }
         match self.state {
             State::Dead => {
                 return;
@@ -537,7 +581,7 @@ impl Game {
                 self.next = self.rand.get_piece();
             }
             State::Clear => {
-                if self.frames >= LINE_CLEAR_FRAMES {
+                if self.frames >= self.stage.get_clear_frames() {
                     self.state = State::Are;
                     self.frames = 0;
                 } else {
@@ -545,7 +589,7 @@ impl Game {
                 }
             }
             State::Are => {
-                if self.frames >= ARE_FRAMES {
+                if self.frames >= self.stage.get_are_frames() {
                     self.board.spawn(TetrhombinoState {
                         tetrhombino: self.next,
                         orientation: Orientation::Start,
@@ -569,14 +613,14 @@ impl Game {
                 } else {
                     self.stuck_frames = 0;
                 }
-                if self.stuck_frames >= LOCK_FRAMES {
+                if self.stuck_frames >= self.stage.get_lock_frames() {
                     self.lock();
-                } else if self.frames >= GRAVITY_FRAMES {
-                    // TODO: variable gravity
-                    self.board.fall();
-                    self.frames = 0;
                 } else {
-                    self.frames += 1;
+                    self.frames += self.stage.get_gravity();
+                    while self.frames >= 256 {
+                        self.board.fall();
+                        self.frames -= 256;
+                    }
                 }
             }
         }
