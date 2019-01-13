@@ -470,6 +470,7 @@ struct KeyState {
     fast_drop: ContinuousKey, // Lock if fallen; otherwise drop a frame
     r_left: SingleKey,
     r_right: SingleKey,
+    reset: SingleKey,
 }
 
 impl KeyState {
@@ -481,6 +482,7 @@ impl KeyState {
             sonic_drop: MultiKey::new(),
             r_left: SingleKey::new(),
             r_right: SingleKey::new(),
+            reset: SingleKey::new(),
         }
     }
 }
@@ -628,6 +630,10 @@ impl Game {
         }
 
         // Input
+        if self.keys.reset.service() {
+            self.reset();
+        }
+
         if self.keys.left.service() {
             self.board.shift_left();
         }
@@ -669,6 +675,10 @@ impl Game {
         }
     }
 
+    fn reset(&mut self) {
+        *self = Game::new()
+    }
+
     fn input(&mut self, button: piston::input::keyboard::Key, press: bool) {
         use piston::input::keyboard::Key;
         match button {
@@ -678,6 +688,7 @@ impl Game {
             Key::Down => self.keys.fast_drop.trigger(press),
             Key::Z => self.keys.r_left.trigger(press),
             Key::X => self.keys.r_right.trigger(press),
+            Key::R => self.keys.reset.trigger(press),
             _ => {} // TODO handle double-rotation in a consistent manner?
         }
     }
