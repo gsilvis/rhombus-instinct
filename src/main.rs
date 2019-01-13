@@ -31,17 +31,17 @@ impl Orientation {
     fn flip_right(&mut self) {
         *self = match *self {
             Orientation::Start => Orientation::Right,
-            Orientation::Right => Orientation::Start,
+            Orientation::Right => Orientation::Both,
             Orientation::Both => Orientation::Left,
-            Orientation::Left => Orientation::Both,
+            Orientation::Left => Orientation::Start,
         }
     }
     fn flip_left(&mut self) {
         *self = match *self {
             Orientation::Start => Orientation::Left,
-            Orientation::Right => Orientation::Both,
+            Orientation::Left => Orientation::Both,
             Orientation::Both => Orientation::Right,
-            Orientation::Left => Orientation::Start,
+            Orientation::Right => Orientation::Start,
         }
     }
 }
@@ -67,24 +67,24 @@ enum ReducedOrientation {
 //   ....  ..I.
 //   ....  ..I.
 
-//   ...  ..S
-//   .SS  .SS
+//   ...  S..
+//   .SS  SS.
 //   SS.  .S.
 
-//   ...  Z..
-//   ZZ.  ZZ.
+//   ...  ..Z
+//   ZZ.  .ZZ
 //   .ZZ  .Z.
 
 // The 'L', 'J', and 'T' pieces have four orientations, ordered here as Start,
 // Right, Both, Left.
 
-//   ...  .L.  ...  .LL
+//   ...  LL.  ...  .L.
 //   LLL  .L.  ..L  .L.
-//   L..  LL.  LLL  .L.
+//   L..  .L.  LLL  .LL
 
-//   ...  JJ.  ...  .J.
-//   JJJ  .J.  J..  .J.
-//   ..J  .J.  JJJ  .JJ
+//   ...   .J. ...  .JJ
+//   JJJ   .J. J..  .J.
+//   ..J   JJ. JJJ  .J.
 
 //   ...  .T.  ...  .T.
 //   TTT  TT.  .T.  .TT
@@ -181,11 +181,11 @@ impl TetrhombinoState {
             },
             Tetrhombino::S => match reduce_orientation(self.orientation) {
                 ReducedOrientation::Start => [(1, 0), (0, 0), (0, -1), (-1, -1)],
-                ReducedOrientation::Flipped => [(0, -1), (0, 0), (1, 0), (1, 1)],
+                ReducedOrientation::Flipped => [(0, -1), (0, 0), (-1, 0), (-1, 1)],
             },
             Tetrhombino::Z => match reduce_orientation(self.orientation) {
                 ReducedOrientation::Start => [(-1, 0), (0, 0), (0, -1), (1, -1)],
-                ReducedOrientation::Flipped => [(0, -1), (0, 0), (-1, 0), (-1, 1)],
+                ReducedOrientation::Flipped => [(0, -1), (0, 0), (1, 0), (1, 1)],
             },
             Tetrhombino::T => match self.orientation {
                 Orientation::Start => [(0, 0), (-1, 0), (1, 0), (0, -1)],
@@ -195,14 +195,14 @@ impl TetrhombinoState {
             },
             Tetrhombino::L => match self.orientation {
                 Orientation::Start => [(0, 0), (1, 0), (-1, 0), (-1, -1)],
-                Orientation::Right => [(0, 0), (0, 1), (0, -1), (-1, -1)],
-                Orientation::Left => [(0, 0), (0, -1), (0, 1), (1, 1)],
+                Orientation::Right => [(0, 0), (0, 1), (0, -1), (1, -1)],
+                Orientation::Left => [(0, 0), (0, -1), (0, 1), (-1, 1)],
                 Orientation::Both => [(1, 0), (1, -1), (0, -1), (-1, -1)],
             },
             Tetrhombino::J => match self.orientation {
                 Orientation::Start => [(0, 0), (-1, 0), (1, 0), (1, -1)],
-                Orientation::Right => [(0, 0), (0, 1), (0, -1), (1, -1)],
-                Orientation::Left => [(0, 0), (0, -1), (0, 1), (-1, 1)],
+                Orientation::Right => [(0, 0), (0, 1), (0, -1), (-1, -1)],
+                Orientation::Left => [(0, 0), (0, -1), (0, 1), (1, 1)],
                 Orientation::Both => [(-1, 0), (-1, -1), (0, -1), (1, -1)],
             },
         };
@@ -470,6 +470,7 @@ struct KeyState {
     fast_drop: ContinuousKey, // Lock if fallen; otherwise drop a frame
     r_left: SingleKey,
     r_right: SingleKey,
+    reset: SingleKey,
 }
 
 impl KeyState {
@@ -481,6 +482,7 @@ impl KeyState {
             sonic_drop: MultiKey::new(),
             r_left: SingleKey::new(),
             r_right: SingleKey::new(),
+            reset: SingleKey::new(),
         }
     }
 }
@@ -628,6 +630,10 @@ impl Game {
         }
 
         // Input
+        if self.keys.reset.service() {
+            self.reset();
+        }
+
         if self.keys.left.service() {
             self.board.shift_left();
         }
@@ -669,6 +675,10 @@ impl Game {
         }
     }
 
+    fn reset(&mut self) {
+        *self = Game::new()
+    }
+
     fn input(&mut self, button: piston::input::keyboard::Key, press: bool) {
         use piston::input::keyboard::Key;
         match button {
@@ -678,6 +688,7 @@ impl Game {
             Key::Down => self.keys.fast_drop.trigger(press),
             Key::Z => self.keys.r_left.trigger(press),
             Key::X => self.keys.r_right.trigger(press),
+            Key::R => self.keys.reset.trigger(press),
             _ => {} // TODO handle double-rotation in a consistent manner?
         }
     }
